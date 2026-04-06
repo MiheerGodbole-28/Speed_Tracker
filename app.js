@@ -328,15 +328,36 @@ function updateCameraToggleBtn() {
 async function startCamera() {
     try {
         await requestWakeLock();
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: 'environment' },
-                width:  { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
-            },
-            audio: false
-        });
+        // Try constraints from highest to lowest — iPhone Safari needs explicit fallbacks
+        const videoConstraintOptions = [
+            // Best: 4K on modern iPhones / flagship Androids
+            { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60, min: 30 } },
+            // Good: 1080p
+            { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, min: 30 } },
+            // Fallback: 720p
+            { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 },  frameRate: { ideal: 30 } },
+            // Last resort: whatever the browser gives us
+            { facingMode: { ideal: 'environment' } }
+        ];
+
+        let lastErr = null;
+        for (const constraints of videoConstraintOptions) {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
+                break; // got a stream, stop trying
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+
+        if (!cameraStream) throw lastErr;
+
+        // Log actual resolution granted by browser / device
+        const track = cameraStream.getVideoTracks()[0];
+        const settings = track.getSettings();
+        console.info(`📷 Camera: ${settings.width}×${settings.height} @ ${settings.frameRate?.toFixed(0) ?? '?'}fps`);
+        // Store for debug panel
+        window._camResolution = `${settings.width}×${settings.height}@${settings.frameRate?.toFixed(0)}fps`;
         vid.srcObject = cameraStream;
         await vid.play();
 
@@ -720,6 +741,7 @@ function updateDebug(ball, data) {
     document.getElementById('d-pts').textContent   = track.length;
     document.getElementById('d-px').textContent    = yCount;
     document.getElementById('d-miss').textContent  = missCount;
+    const resEl = document.getElementById('d-res'); if (resEl) resEl.textContent = window._camResolution || 'unknown';
     document.getElementById('d-cal').textContent   = calibration
         ? calibration.pxPerM.toFixed(1) + ' px/m  (' + calibration.distM + 'm)'
         : 'not set';
