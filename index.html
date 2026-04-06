@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPL Speed Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="speed.css">
+    <link rel="icon" href="VPL_logo.jpeg" type="image/x-icon">
+</head>
+<body>
+
+    <!-- ── HEADER — identical structure to VPL scoreboard ──── -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1>🏏 VPL Speed Tracker</h1>
+            </div>
+            <nav class="nav" id="mainNav">
+                <button id="loginBtn"  class="login-btn"  type="button">Admin Login</button>
+                <button id="logoutBtn" class="logout-btn hidden" type="button">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ── LOGIN MODAL — exact same as VPL scoreboard ─────── -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" id="closeModal">&times;</span>
+            <h2>Admin Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" placeholder="Enter admin email" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+                <p class="form-message" id="loginMessage"></p>
+            </form>
+        </div>
+    </div>
+
+    <main class="main-content">
+        <div class="container">
+
+            <!-- ══════════════════════════════════════════════════════
+                 TRACKER SECTION — admin only, hidden by default.
+                 Camera, calibration, auto-detection controls.
+                 Shown when admin logs in via showAdminUI().
+            ══════════════════════════════════════════════════════ -->
+            <section id="trackerSection" class="admin-only hidden">
+                <h2 class="section-title">Live Tracker</h2>
+
+                <div class="tracker-layout">
+
+                    <!-- Camera panel -->
+                    <div class="camera-panel">
+                        <div class="camera-wrap" id="cameraWrap">
+                            <canvas id="cam"></canvas>
+
+                            <!-- Status badge top-left of camera -->
+                            <div class="cam-badge" id="camBadge">
+                                <span class="cam-dot" id="camDot"></span>
+                                <span id="camBadgeTxt">Starting</span>
+                            </div>
+
+                            <!-- Detected speed flash over camera -->
+                            <div class="cam-speed-flash hidden" id="camSpeedFlash"></div>
+
+                            <!-- Track progress bar -->
+                            <div class="track-bar-wrap">
+                                <div class="track-bar" id="trackBar"></div>
+                            </div>
+
+                            <!-- No camera fallback -->
+                            <div class="no-cam hidden" id="noCam">
+                                <p>📷</p>
+                                <p>Camera blocked or not supported.</p>
+                                <p>Allow camera access in your browser settings and reload.</p>
+                                <p>The page must be served over HTTPS.</p>
+                            </div>
+                        </div>
+
+                        <!-- Camera action buttons below camera -->
+                        <div class="cam-actions">
+                            <button class="cam-btn active" id="btnCamToggle" type="button">📷 Camera: ON</button>
+                            <button class="cam-btn active" id="btnTriggerMode" type="button">🎯 Remote: ON</button>
+                            <button class="cam-btn" id="btnCal"   type="button">📐 Calibrate</button>
+                            <button class="cam-btn" id="btnDebug" type="button">🔍 Debug</button>
+                            <button class="cam-btn" id="btnClear" type="button">🗑 Clear Session</button>
+                        </div>
+                        <!-- Remote tip banner -->
+                        <div class="remote-tip" id="remoteTip">
+                            📱 Press your selfie stick button just before each delivery to arm tracking. The camera badge will flash <strong>🎯 Armed</strong>.
+                        </div>
+
+                        <!-- Debug readout -->
+                        <div class="debug-panel hidden" id="debugPanel">
+                            <div class="debug-row"><span>State</span><span id="d-state">-</span></div>
+                            <div class="debug-row"><span>Ball pos</span><span id="d-ball">-</span></div>
+                            <div class="debug-row"><span>Velocity</span><span id="d-vel">-</span> px/f</div>
+                            <div class="debug-row"><span>Track pts</span><span id="d-pts">-</span></div>
+                            <div class="debug-row"><span>Yellow px</span><span id="d-px">-</span></div>
+                            <div class="debug-row"><span>Miss count</span><span id="d-miss">-</span></div>
+                            <div class="debug-row"><span>Calibration</span><span id="d-cal">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Calibration instruction card (shown between tap steps) -->
+                    <div class="cal-instruction hidden" id="calInstruction">
+                        <div class="cal-step-label" id="calStepLabel">Step 1 of 2</div>
+                        <div class="cal-step-text"  id="calStepText">Tap the bowling crease on the camera image above</div>
+                        <button class="btn btn-secondary" id="btnCancelCal" type="button">Cancel</button>
+                    </div>
+
+                    <!-- Distance input card (shown after both points tapped) -->
+                    <div class="cal-dist-card hidden" id="calDistCard">
+                        <h3 class="cal-dist-title">Enter Reference Distance</h3>
+                        <p class="cal-dist-sub">Real-world distance in metres between the two points you tapped</p>
+                        <div class="dist-input-row">
+                            <input type="number" id="distInput" class="dist-input" placeholder="7" min="1" max="30" step="0.5">
+                            <span class="dist-unit">metres</span>
+                        </div>
+                        <div class="cal-dist-btns">
+                            <button class="btn btn-primary" id="btnSaveCal" disabled type="button">Save</button>
+                            <button class="btn btn-secondary" id="btnCancelDist" type="button">Cancel</button>
+                        </div>
+                    </div>
+
+                </div><!-- /tracker-layout -->
+            </section>
+
+            <!-- ══════════════════════════════════════════════════════
+                 DISPLAY SECTION — visible to everyone always.
+                 Live speed readout fed by Supabase Realtime.
+            ══════════════════════════════════════════════════════ -->
+            <section id="displaySection">
+                <h2 class="section-title">Live Speed</h2>
+
+                <!-- Big speed number -->
+                <div class="speed-hero">
+                    <div class="speed-hero-inner">
+                        <div class="speed-label-top">Current Ball</div>
+                        <div class="speed-number" id="speedNumber">--</div>
+                        <div class="speed-unit">km / h</div>
+                        <div class="speed-cat hidden" id="speedCat"></div>
+                        <div class="speed-since" id="speedSince"></div>
+                    </div>
+                </div>
+
+                <!-- Session stats row -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Fastest</div>
+                        <div class="stat-value gold" id="statFastest">--</div>
+                        <div class="stat-sub">km/h</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Average</div>
+                        <div class="stat-value green" id="statAvg">--</div>
+                        <div class="stat-sub">km/h</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Deliveries</div>
+                        <div class="stat-value" id="statCount">0</div>
+                        <div class="stat-sub">today</div>
+                    </div>
+                </div>
+
+                <!-- Ball-by-ball log -->
+                <div class="log-section">
+                    <div class="log-header">
+                        <span class="log-title">Ball Log</span>
+                        <span class="conn-badge">
+                            <span class="conn-dot" id="connDot"></span>
+                            <span id="connTxt">Connecting</span>
+                        </span>
+                    </div>
+                    <div id="ballLog" class="ball-log">
+                        <div class="log-empty" id="logEmpty">
+                            <div class="log-waiting-icon">⏱</div>
+                            Waiting for deliveries...
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+        </div><!-- /container -->
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 VrindaOne Premiere League. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Hidden video element for camera feed -->
+    <video id="vid" autoplay muted playsinline style="display:none;"></video>
+
+    <!-- Tap markers appended to body during calibration -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
